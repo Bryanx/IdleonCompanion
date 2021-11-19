@@ -6,32 +6,58 @@
         <q-toggle v-model="hideCompletedQuests" label="Hide Completed Quests" />
       </div>
       <div class="grid grid-cols-3 mt-2">
-        <div v-for="world in NUM_WORLDS">
+        <div v-for="(npcs, category) in AllQuests">
           <div
-            class="text-xl text-light text-center font-medium p-2 mx-4 rounded"
-            :class="worldClass(world)"
+            class="text-xl text-light text-center font-medium p-2 m-2 rounded"
+            :class="categoryClass(category)"
           >
-            World {{ world }} {{ getCompletedByWorldText(world) }}
+            {{ category }} {{ getCompletedByCategoryText(category) }}
           </div>
-          <q-item
-            v-for="quest in getQuestsByWorld(world)"
-            class="flex items-center"
-          >
-            <q-img
-              height="64px"
-              width="64px"
-              fit="contain"
-              :src="Assets.NPCAnimated(quest.npc)"
-            />
-            <q-checkbox
-              :model-value="questComplete(quest.id)"
-              @click="onToggleQuestComplete(quest.id)"
-            />
-            <div class="flex flex-col">
-              <div>{{ quest.name }}</div>
-              <div class="text-secondary">{{ quest.npc }}</div>
-            </div>
-          </q-item>
+          <div class="flex flex-wrap w-full mx-4">
+            <Tooltip v-for="(quests, npc) in npcs">
+              <div class="flex flex-col">
+                <img
+                  class="cursor-pointer m-1 w-16 h-16 object-contain"
+                  :src="Assets.NPCAnimated(npc)"
+                />
+                <q-badge
+                  class="mx-auto"
+                  :color="
+                    numQuestsCompleted(quests) === quests.length ? 'green' : ''
+                  "
+                  >{{ numQuestsCompleted(quests) }}/{{ quests.length }}</q-badge
+                >
+                <q-popup-proxy>
+                  <q-card class="pt-4 px-4 bg-primary">
+                    <q-timeline color="grey-7">
+                      <q-timeline-entry heading tag="div">
+                        <div class="text-xl -mb-4">{{ npc }}</div>
+                      </q-timeline-entry>
+                      <q-timeline-entry
+                        class="cursor-pointer"
+                        v-for="quest in filteredQuests(quests)"
+                        :color="questComplete(quest.id) ? 'green' : ''"
+                        :icon="
+                          questComplete(quest.id) ? 'mdi-check' : 'mdi-minus'
+                        "
+                        @click="onToggleQuestComplete(quest.id)"
+                        ><template #subtitle>
+                          <div
+                            :class="questComplete(quest.id) ? 'text-green' : ''"
+                          >
+                            {{ quest.name }}
+                          </div>
+                        </template>
+                      </q-timeline-entry>
+                    </q-timeline>
+                  </q-card>
+                </q-popup-proxy>
+              </div>
+              <template #content>
+                {{ npc }}
+              </template>
+            </Tooltip>
+          </div>
         </div>
       </div>
     </q-card-section>
@@ -39,32 +65,37 @@
 </template>
 
 <script lang="ts">
-import { AllQuests } from "~/composables/Quests";
+import { AllQuests, Quest } from "~/composables/Quests";
 import { Assets } from "~/composables/Utilities";
 import { defineComponent, ref } from "vue";
 import { useCharacters } from "~/composables/Characters";
+import ICAsset from "~/components/idleon-companion/IC-Asset.vue";
 
 export default defineComponent({
   name: "Quests",
+  components: {
+    ICAsset,
+  },
   setup() {
     const { currentCharacter } = useCharacters();
 
     const hideCompletedQuests = ref(false);
 
-    const NUM_WORLDS = 3;
-    const getQuestsByWorld = (world: number) => {
-      return AllQuests.filter((quest) => {
-        return (
-          quest.world === world &&
-          (hideCompletedQuests.value ? !questComplete(quest.id) : true)
-        );
+    const filteredQuests = (quests: Array<Quest>) => {
+      return quests.filter((quest) => {
+        return hideCompletedQuests.value ? !questComplete(quest.id) : true;
       });
     };
 
-    const getCompletedByWorldText = (world: number): string => {
-      let quests = getQuestsByWorld(world);
-      let completed = quests.filter((x) => questComplete(x.id));
-      return `(${completed.length}/${quests.length})`;
+    const getCompletedByCategoryText = (category: string): string => {
+      let quests = Object.values(
+        AllQuests[category as keyof typeof AllQuests]
+      ).flat();
+      return `(${numQuestsCompleted(quests)}/${quests.length})`;
+    };
+
+    const numQuestsCompleted = (quests: Array<Quest>): number => {
+      return quests.filter((x) => questComplete(x.id)).length;
     };
 
     const questComplete = (id: string) => {
@@ -77,29 +108,27 @@ export default defineComponent({
       }
     };
 
-    const worldClass = (world: number): string => {
-      if (world === 1) {
-        return "bg-green-600";
-      }
-      if (world === 2) {
-        return "bg-yellow-400";
-      }
-      if (world === 3) {
-        return "bg-blue-400";
-      }
-      return "";
+    const categoryClass = (category: string): string => {
+      return (
+        {
+          "World 1": "bg-green-600",
+          "World 2": "bg-yellow-400",
+          "World 3": "bg-blue-400",
+        }[category] ?? ""
+      );
     };
 
     return {
+      AllQuests,
       Assets,
+      categoryClass,
       currentCharacter,
-      getCompletedByWorldText,
-      getQuestsByWorld,
+      filteredQuests,
+      getCompletedByCategoryText,
       hideCompletedQuests,
-      NUM_WORLDS,
+      numQuestsCompleted,
       onToggleQuestComplete,
       questComplete,
-      worldClass,
     };
   },
 });
